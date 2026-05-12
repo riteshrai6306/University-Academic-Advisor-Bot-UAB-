@@ -1,0 +1,76 @@
+# ================================================================
+# University Academic Advisor Bot (UAB)
+# ================================================================
+# SETUP: pip install -r requirements.txt
+# ================================================================
+
+
+# ── LLM & AGENTIC FRAMEWORK ─────────────────────────────────────
+# WHY: base framework for building LLM pipelines
+langchain
+
+# WHY: community integrations — FAISS, SQL, PDF loaders
+langchain-community
+
+# WHY: LangChain's official OpenAI connector
+langchain-openai
+
+# WHY: direct OpenAI SDK to call GPT models
+openai
+
+# WHY: agentic graph engine — handles nodes, edges, routing, state
+langgraph
+
+
+# ── RAG SPECIFIC ─────────────────────────────────────────────────
+# WHY: reads and extracts text from normal PDF files page by page
+pypdf
+
+# WHY: FAISS stores and searches PDF embeddings locally
+# NOTE: cpu version — no GPU needed
+faiss-cpu
+
+
+# ── STRUCTURED DATA (TEXT-TO-SQL) ────────────────────────────────
+# WHY: loads Excel sheets into pandas dataframes
+pandas
+
+# WHY: engine pandas uses internally to read .xlsx files
+openpyxl
+
+# WHY: safe SQL execution between agent and SQLite
+sqlalchemy
+
+
+# ── WEB SEARCH ───────────────────────────────────────────────────
+# WHY: fetches live scholarship and internship data
+tavily-python
+
+
+# ── UI ───────────────────────────────────────────────────────────
+# WHY: builds our student chat interface
+streamlit
+
+
+# ── UTILITIES ────────────────────────────────────────────────────
+# WHY: reads API keys from .env file automatically
+python-dotenv
+
+# WHY: OCR support for scanned PDF documents
+pytesseract
+pdf2image
+Pillow
+
+# WHY: token counting to avoid exceeding GPT context window
+tiktoken
+
+# WHY: required by create_sql_agent to inspect schema,
+#      execute SQL, and handle multi-step agent reasoning
+langchain-experimental
+
+# WHY: free web search — no API key required
+# WHY: alternative to Tavily for fetching live scholarship/internship data
+ddgs
+
+# WHY: text splitting moved to its own package in newer LangChain
+langchain-text-splitters
