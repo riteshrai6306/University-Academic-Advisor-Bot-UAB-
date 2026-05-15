@@ -15,7 +15,6 @@
 # ── IMPORTS ─────────────────────────────────────────────────────
  
 import os
-import pickle
 import re
 
 # WHY: OCR support for scanned PDF pages
@@ -71,22 +70,23 @@ VECTORSTORE_DIR = os.path.join(os.path.dirname(__file__), "..", "vectorstore")
 FAISS_INDEX_PATH = os.path.join(VECTORSTORE_DIR, "index.faiss")
 FAISS_PKL_PATH   = os.path.join(VECTORSTORE_DIR, "index.pkl")
 
-# WHY: cache objects to avoid repeated expensive reloads
-_rag_vectorstore = None
-_rag_embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-_rag_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
- 
 # WHY: chunk size = 1000 chars gives enough context per chunk
 # WHY: overlap = 200 chars prevents losing meaning at chunk boundaries
 # NOTE: tune these if answers feel incomplete or too broad
 CHUNK_SIZE    = 1000
 CHUNK_OVERLAP = 200
  
-# WHY: top 8 chunks retrieved per question — balance of context vs noise
-TOP_K_CHUNKS = 4
+# WHY: top 5 chunks retrieved per question — balance of context vs noise
+TOP_K_CHUNKS = 5
 
-# WHY: dpi used for converting scanned PDF pages to images for OCR
-OCR_DPI = 300
+# WHY: cache objects to avoid repeated expensive reloads
+_rag_vectorstore = None
+_rag_embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+_rag_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+
+# # WHY: dpi used for converting scanned PDF pages to images for OCR
+# OCR_DPI = 300
  
  
 # ── PROMPT TEMPLATE ─────────────────────────────────────────────
@@ -115,73 +115,73 @@ RAG_PROMPT = PromptTemplate(
 )
  
 
-def ocr_pdf_page(pdf_path: str, page_number: int) -> str:
-    """
-    WHAT: Converts a scanned PDF page into text using OCR.
-    WHY:  Some uploaded PDFs are scanned images and have no extractable text.
-    """
+# def ocr_pdf_page(pdf_path: str, page_number: int) -> str:
+#     """
+#     WHAT: Converts a scanned PDF page into text using OCR.
+#     WHY:  Some uploaded PDFs are scanned images and have no extractable text.
+#     """
 
-    images = convert_from_path(
-        pdf_path,
-        dpi=OCR_DPI,
-        first_page=page_number,
-        last_page=page_number,
-    )
+#     images = convert_from_path(
+#         pdf_path,
+#         dpi=OCR_DPI,
+#         first_page=page_number,
+#         last_page=page_number,
+#     )
 
-    if not images:
-        return ""
+    # if not images:
+    #     return ""
 
-    page_image = images[0]
-    text = pytesseract.image_to_string(page_image, lang="eng")
+    # page_image = images[0]
+    # text = pytesseract.image_to_string(page_image, lang="eng")
     
-    # Clean up common OCR artifacts
-    text = text.strip()
-    # Remove excessive spaces between characters (common OCR issue)
-    text = re.sub(r'(?<=\w)\s(?=\w)', '', text)
-    # Fix common OCR mistakes
-    text = re.sub(r'\s+', ' ', text)
+    # # Clean up common OCR artifacts
+    # text = text.strip()
+    # # Remove excessive spaces between characters (common OCR issue)
+    # text = re.sub(r'(?<=\w)\s(?=\w)', '', text)
+    # # Fix common OCR mistakes
+    # text = re.sub(r'\s+', ' ', text)
     
-    return text
+#     return text
 
-def is_low_quality_text(text: str) -> bool:
-    """
-    WHAT: Detects text that is likely broken or garbled from scanned PDFs.
-    WHY:  Some scanned pages have a text layer with poor OCR output in the PDF.
-    """
+# def is_low_quality_text(text: str) -> bool:
+#     """
+#     WHAT: Detects text that is likely broken or garbled from scanned PDFs.
+#     WHY:  Some scanned pages have a text layer with poor OCR output in the PDF.
+#     """
 
-    text = text.strip()
-    if not text:
-        return True
+#     text = text.strip()
+#     if not text:
+#         return True
 
-    words = text.split()
-    if len(words) < 10:  # Lower threshold
-        return True
+#     words = text.split()
+#     if len(words) < 10:  # Lower threshold
+    #     return True
 
-    one_letter_words = sum(1 for word in words if len(word) == 1)
-    if one_letter_words / len(words) > 0.10:  # Lower threshold
-        return True
+    # one_letter_words = sum(1 for word in words if len(word) == 1)
+    # if one_letter_words / len(words) > 0.10:  # Lower threshold
+    #     return True
 
-    # Check for excessive spaces between characters (OCR artifact)
-    if re.search(r'(?:\b[a-zA-Z]\b[\s\n]+){5,}', text):
-        return True
+    # # Check for excessive spaces between characters (OCR artifact)
+    # if re.search(r'(?:\b[a-zA-Z]\b[\s\n]+){5,}', text):
+    #     return True
     
-    # Check for very short average word length (indicates character splitting)
-    avg_word_len = sum(len(word) for word in words) / len(words)
-    if avg_word_len < 3:
-        return True
+    # # Check for very short average word length (indicates character splitting)
+    # avg_word_len = sum(len(word) for word in words) / len(words)
+    # if avg_word_len < 3:
+    #     return True
 
-    return False
+    # return False
 
 
-def apply_ocr_to_low_quality_pages(pdf_path: str, documents: list) -> list:
-    """
-    WHAT: OCR is currently disabled due to missing dependencies.
-    WHY:  Poppler and Tesseract need to be installed for OCR to work.
-    TODO: Install OCR dependencies and re-enable this function.
-    """
+# def apply_ocr_to_low_quality_pages(pdf_path: str, documents: list) -> list:
+#     """
+#     WHAT: OCR is currently disabled due to missing dependencies.
+#     WHY:  Poppler and Tesseract need to be installed for OCR to work.
+#     TODO: Install OCR dependencies and re-enable this function.
+#     """
     
-    print(f"   Skipping OCR for {pdf_path} (dependencies not available)")
-    return documents
+#     print(f"   Skipping OCR for {pdf_path} (dependencies not available)")
+#     return documents
 
 
 # ================================================================
@@ -218,13 +218,13 @@ def load_pdfs() -> list:
         loader = PyPDFLoader(pdf_path)
         documents = loader.load()
 
-        # WHY: if the PDF is scanned, low-quality pages will be detected and OCR will extract text
-        documents = apply_ocr_to_low_quality_pages(pdf_path, documents)
+        # # WHY: if the PDF is scanned, low-quality pages will be detected and OCR will extract text
+        # documents = apply_ocr_to_low_quality_pages(pdf_path, documents)
 
         print(f"OK Loaded: {pdf_file} — {len(documents)} pages")
         all_documents.extend(documents)
  
-    print(f"\nDOCS Total pages loaded: {len(all_documents)}")
+    print(f"\nTotal pages loaded: {len(all_documents)}")
     return all_documents
  
  
@@ -260,92 +260,133 @@ def split_documents(documents: list) -> list:
  
  
 # ================================================================
-# STEP 3 — CREATE EMBEDDINGS & SAVE TO FAISS
+# STEP 3 — INGEST: PDF → CHUNKS → EMBEDDINGS → FAISS
 # ================================================================
- 
+
 def ingest_pdfs():
-    """
-    WHAT: Full ingestion pipeline — PDF → chunks → embeddings → FAISS.
-    WHY:  Run this ONCE when you add new PDFs.
-          After this, FAISS index is saved locally and reused every time.
+    print("\nStarting PDF ingestion...\n")
  
-    SAVES:
-        vectorstore/index.faiss  ← vector index (numbers)
-        vectorstore/index.pkl    ← chunk texts + metadata
-    """
- 
-    print("\nPROCESSING Starting PDF ingestion...\n")
- 
-    # STEP 1: Load PDFs
     documents = load_pdfs()
     if not documents:
         return
  
-    # STEP 2: Split into chunks
     chunks = split_documents(documents)
  
-    # STEP 3: Create embeddings
-    # WHY: OpenAIEmbeddings converts each chunk into a vector (list of numbers)
-    # WHY: text-embedding-3-small is fast, cheap, and accurate enough for our use
-    print("\nPROCESSING Creating embeddings (this may take a moment)...")
-    embeddings = OpenAIEmbeddings(
-        model="text-embedding-3-small"
-    )
+    print("\nCreating embeddings...")
+    vectorstore = FAISS.from_documents(documents=chunks, embedding=_rag_embeddings)
  
-    # STEP 4: Store in FAISS
-    # WHY: FAISS.from_documents embeds all chunks and builds the searchable index
-    print("PROCESSING Building FAISS index...")
-    vectorstore = FAISS.from_documents(
-        documents=chunks,
-        embedding=embeddings
-    )
- 
-    # STEP 5: Save FAISS index to disk
-    # WHY: so we don't re-embed every time the app restarts (saves time + API cost)
     os.makedirs(VECTORSTORE_DIR, exist_ok=True)
     vectorstore.save_local(VECTORSTORE_DIR)
  
     print(f"\nOK FAISS index saved to: {VECTORSTORE_DIR}")
-    print(f"   Files created:")
-    print(f"   → vectorstore/index.faiss  (vector index)")
-    print(f"   → vectorstore/index.pkl    (chunk metadata)")
-    print(f"\nSUCCESS Ingestion complete! {len(chunks)} chunks indexed.")
+    print(f"SUCCESS Ingestion complete — {len(chunks)} chunks indexed.")
+
+# def ingest_pdfs():
+#     """
+#     WHAT: Full ingestion pipeline — PDF → chunks → embeddings → FAISS.
+#     WHY:  Run this ONCE when you add new PDFs.
+#           After this, FAISS index is saved locally and reused every time.
+ 
+#     SAVES:
+#         vectorstore/index.faiss  ← vector index (numbers)
+#         vectorstore/index.pkl    ← chunk texts + metadata
+#     """
+ 
+#     print("\nPROCESSING Starting PDF ingestion...\n")
+ 
+#     # STEP 1: Load PDFs
+#     documents = load_pdfs()
+#     if not documents:
+#         return
+ 
+#     # STEP 2: Split into chunks
+#     chunks = split_documents(documents)
+
+#     print("\nCreating embeddings...")
+#     vectorstore = FAISS.from_documents(documents=chunks, embedding=_rag_embeddings)
+ 
+#     # STEP 3: Create embeddings
+#     # WHY: OpenAIEmbeddings converts each chunk into a vector (list of numbers)
+#     # WHY: text-embedding-3-small is fast, cheap, and accurate enough for our use
+#     print("\nPROCESSING Creating embeddings (this may take a moment)...")
+#     embeddings = OpenAIEmbeddings(
+#         model="text-embedding-3-small"
+#     )
+ 
+#     # STEP 4: Store in FAISS
+#     # WHY: FAISS.from_documents embeds all chunks and builds the searchable index
+#     print("PROCESSING Building FAISS index...")
+#     vectorstore = FAISS.from_documents(
+#         documents=chunks,
+#         embedding=embeddings
+#     )
+ 
+#     # STEP 5: Save FAISS index to disk
+#     # WHY: so we don't re-embed every time the app restarts (saves time + API cost)
+#     os.makedirs(VECTORSTORE_DIR, exist_ok=True)
+#     vectorstore.save_local(VECTORSTORE_DIR)
+ 
+#     print(f"\nOK FAISS index saved to: {VECTORSTORE_DIR}")
+#     print(f"   Files created:")
+#     print(f"   → vectorstore/index.faiss  (vector index)")
+#     print(f"   → vectorstore/index.pkl    (chunk metadata)")
+#     print(f"\nSUCCESS Ingestion complete! {len(chunks)} chunks indexed.")
  
  
 # ================================================================
 # STEP 4 — LOAD FAISS INDEX (at query time)
 # ================================================================
- 
 def load_vectorstore() -> FAISS:
-    """
-    WHAT: Loads the saved FAISS index from disk.
-    WHY:  Instead of re-embedding every time, we load the saved index.
-          This makes every query fast — no API call for embeddings at runtime.
- 
-    RETURNS: FAISS vectorstore object ready for similarity search
-    """
- 
     global _rag_vectorstore
+ 
     if _rag_vectorstore is not None:
         return _rag_vectorstore
  
-    # WHY: check if FAISS index exists before trying to load
     if not os.path.exists(FAISS_INDEX_PATH):
         raise FileNotFoundError(
-            "FAISS index not found!\n"
-            "Run ingest_pdfs() first to create the index.\n"
+            "FAISS index not found! Run ingest_pdfs() first.\n"
             f"Expected at: {FAISS_INDEX_PATH}"
         )
  
-    # WHY: allow_dangerous_deserialization=True needed for loading pkl files
-    # NOTE: safe here because WE created these files ourselves
     _rag_vectorstore = FAISS.load_local(
         folder_path=VECTORSTORE_DIR,
         embeddings=_rag_embeddings,
         allow_dangerous_deserialization=True
     )
  
+    print(f"OK Vectorstore loaded — {_rag_vectorstore.index.ntotal} chunks indexed")
     return _rag_vectorstore
+ 
+# def load_vectorstore() -> FAISS:
+#     """
+#     WHAT: Loads the saved FAISS index from disk.
+#     WHY:  Instead of re-embedding every time, we load the saved index.
+#           This makes every query fast — no API call for embeddings at runtime.
+ 
+#     RETURNS: FAISS vectorstore object ready for similarity search
+#     """
+ 
+#     global _rag_vectorstore
+#     if _rag_vectorstore is not None:
+#         return _rag_vectorstore
+ 
+#     # WHY: check if FAISS index exists before trying to load
+#     if not os.path.exists(FAISS_INDEX_PATH):
+#         raise FileNotFoundError(
+#             "FAISS index not found!\n"
+#             "Run ingest_pdfs() first to create the index.\n"
+#             f"Expected at: {FAISS_INDEX_PATH}"
+#         )
+ 
+#     # WHY: allow_dangerous_deserialization=True needed for loading pkl files
+#     # NOTE: safe here because WE created these files ourselves
+#     _rag_vectorstore = FAISS.load_local(
+#         folder_path=VECTORSTORE_DIR,
+#         embeddings=_rag_embeddings,
+#         allow_dangerous_deserialization=True
+#     )
+ 
+#     return _rag_vectorstore
 
 
 # ================================================================
@@ -414,7 +455,6 @@ def run_rag_agent(question: str) -> dict:
  
     return {
         "answer":  answer,
-        "sources": source_docs,
         "chunks":  chunks
     }
  

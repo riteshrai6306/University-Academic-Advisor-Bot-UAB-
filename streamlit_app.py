@@ -196,25 +196,10 @@ st.markdown("""
 # CHAT HISTORY DISPLAY
 # ================================================================
 
-def render_sources(sources: list):
-    """Renders source chips below a bot message."""
-    if not sources:
-        return ""
-
-    chips = ""
-    for src in sources:
-        if hasattr(src, "metadata"):
-            # RAG: LangChain Document object
-            file_name = src.metadata.get("source", "Unknown PDF")
-            page      = src.metadata.get("page", "")
-            label     = f"📄 {file_name}" + (f" p.{page+1}" if page != "" else "")
-            chips += f'<span class="source-chip">{label}</span>'
-        elif isinstance(src, str) and src.startswith("http"):
-            chips += f'<span class="source-chip">🔗 {src}</span>'
-        elif isinstance(src, str):
-            chips += f'<span class="source-chip">📄 {src}</span>'
-
-    return f'<div style="margin-top:8px;">{chips}</div>'
+# def render_sources(sources: list):
+#     """Renders source chips below a bot message."""
+#     if not sources:
+#         return ""
 
 
 chat_container = st.container()
@@ -228,16 +213,15 @@ with chat_container:
             )
         else:
             agent   = msg.get("agent", "")
-            sources = msg.get("sources", [])
             emoji   = AGENT_EMOJI.get(agent, "🤖")
             label   = AGENT_LABEL.get(agent, agent.upper())
 
             badge   = f'<div class="msg-agent-badge">{emoji} {label}</div>'
             content = msg["content"].replace("\n", "<br>")
-            srcs    = render_sources(sources)
+            # srcs    = render_sources(sources)
 
             st.markdown(
-                f'<div class="msg-bot">{badge}{content}{srcs}</div>',
+                f'<div class="msg-bot">{badge}{content}</div>',
                 unsafe_allow_html=True
             )
 
