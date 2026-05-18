@@ -20,12 +20,15 @@ import re
 # WHY: OCR support for scanned PDF pages
 from pdf2image import convert_from_path
 import pytesseract
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+OCR_DPI = 300
 
 # WHY: loads our API keys from .env file automatically
 from dotenv import load_dotenv
 
 # WHY: LangChain's PDF loader — reads PDF files page by page
 from langchain_community.document_loaders import PyPDFLoader
+import pdfplumber # WHY: extracts tables from PDFs as structured data
 
 # WHY: splits large PDF text into smaller overlapping chunks
 # WHY: RecursiveCharacterTextSplitter is the best default splitter —
@@ -84,9 +87,6 @@ _rag_vectorstore = None
 _rag_embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 _rag_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
-
-# # WHY: dpi used for converting scanned PDF pages to images for OCR
-# OCR_DPI = 300
  
  
 # ── PROMPT TEMPLATE ─────────────────────────────────────────────
@@ -99,7 +99,10 @@ You are a helpful and professional University Academic Advisor.
 Use the following context from university documents to answer the student's question.
 If the answer is not found in the context, say:
 "I don't have that information in the current university documents."
- 
+
+If the context contains a table (in markdown format with | symbols),
+present it as a proper formatted table in your answer exactly as structured.
+
 Context:
 {context}
 
@@ -113,76 +116,122 @@ RAG_PROMPT = PromptTemplate(
     template=RAG_PROMPT_TEMPLATE,
     input_variables=["context", "question"]
 )
- 
 
-# def ocr_pdf_page(pdf_path: str, page_number: int) -> str:
-#     """
-#     WHAT: Converts a scanned PDF page into text using OCR.
-#     WHY:  Some uploaded PDFs are scanned images and have no extractable text.
-#     """
+def is_low_quality_text(text: str) -> bool:
+    """
+    WHAT: Detects if extracted text is garbage (scanned page with no real text layer).
+    WHY:  PyPDFLoader sometimes extracts broken characters from scanned pages.
+    """
+    text = text.strip()
+    if not text:
+        return True
 
-#     images = convert_from_path(
-#         pdf_path,
-#         dpi=OCR_DPI,
-#         first_page=page_number,
-#         last_page=page_number,
-#     )
+    words = text.split()
+    if len(words) < 10:
+        return True
 
-    # if not images:
-    #     return ""
+    # WHY: scanned pages often produce lots of single-character "words"
+    one_letter_words = sum(1 for word in words if len(word) == 1)
+    if one_letter_words / len(words) > 0.10:
+        return True
 
-    # page_image = images[0]
-    # text = pytesseract.image_to_string(page_image, lang="eng")
-    
-    # # Clean up common OCR artifacts
-    # text = text.strip()
-    # # Remove excessive spaces between characters (common OCR issue)
-    # text = re.sub(r'(?<=\w)\s(?=\w)', '', text)
-    # # Fix common OCR mistakes
-    # text = re.sub(r'\s+', ' ', text)
-    
-#     return text
+    # WHY: very short average word length = character splitting (OCR artifact)
+    avg_word_len = sum(len(word) for word in words) / len(words)
+    if avg_word_len < 3:
+        return True
 
-# def is_low_quality_text(text: str) -> bool:
-#     """
-#     WHAT: Detects text that is likely broken or garbled from scanned PDFs.
-#     WHY:  Some scanned pages have a text layer with poor OCR output in the PDF.
-#     """
+    return False
 
-#     text = text.strip()
-#     if not text:
-#         return True
+def ocr_pdf_page(pdf_path: str, page_number: int) -> str:
+    """
+    WHAT: Converts a single scanned PDF page to text using OCR.
+    WHY:  Scanned pages have no extractable text — we convert to image first.
+    """
+    images = convert_from_path(
+        pdf_path,
+        dpi=OCR_DPI,
+        first_page=page_number,
+        last_page=page_number,
+    )
 
-#     words = text.split()
-#     if len(words) < 10:  # Lower threshold
-    #     return True
+    if not images:
+        return ""
 
-    # one_letter_words = sum(1 for word in words if len(word) == 1)
-    # if one_letter_words / len(words) > 0.10:  # Lower threshold
-    #     return True
+    text = pytesseract.image_to_string(images[0], lang="eng")
 
-    # # Check for excessive spaces between characters (OCR artifact)
-    # if re.search(r'(?:\b[a-zA-Z]\b[\s\n]+){5,}', text):
-    #     return True
-    
-    # # Check for very short average word length (indicates character splitting)
-    # avg_word_len = sum(len(word) for word in words) / len(words)
-    # if avg_word_len < 3:
-    #     return True
+    # WHY: clean up common OCR artifacts
+    text = text.strip()
+    text = re.sub(r'\s+', ' ', text)
 
-    # return False
+    return text
 
+def apply_ocr_to_low_quality_pages(pdf_path: str, documents: list) -> list:
+    """
+    WHAT: Loops through all pages — replaces low quality text with OCR text.
+    WHY:  Auto-handles mixed PDFs (some pages normal, some scanned).
+    """
+    improved_documents = []
 
-# def apply_ocr_to_low_quality_pages(pdf_path: str, documents: list) -> list:
-#     """
-#     WHAT: OCR is currently disabled due to missing dependencies.
-#     WHY:  Poppler and Tesseract need to be installed for OCR to work.
-#     TODO: Install OCR dependencies and re-enable this function.
-#     """
-    
-#     print(f"   Skipping OCR for {pdf_path} (dependencies not available)")
-#     return documents
+    for doc in documents:
+        if is_low_quality_text(doc.page_content):
+            page_number = doc.metadata.get("page", 1)
+            print(f"   OCR applied → page {page_number} of {pdf_path}")
 
+            ocr_text = ocr_pdf_page(pdf_path, page_number)
+
+            if ocr_text:
+                doc.page_content = ocr_text  # WHY: replace bad text with OCR text
+
+        improved_documents.append(doc)
+
+    return improved_documents
+
+# ================================================================
+# HELPER — EXTRACT TABLES FROM A PDF PAGE AS MARKDOWN
+# ================================================================
+
+def extract_tables_from_pdf(pdf_path: str) -> list:
+    """
+    WHAT: Extracts tables from a PDF and converts them to markdown chunks.
+    WHY:  PyPDFLoader destroys table structure — pdfplumber preserves rows/columns.
+    RETURNS: list of LangChain Document objects, one per table found
+    """
+    from langchain_core.documents import Document
+
+    table_documents = []
+
+    with pdfplumber.open(pdf_path) as pdf:
+        for page_num, page in enumerate(pdf.pages):
+            tables = page.extract_tables()
+
+            for table in tables:
+                if not table:
+                    continue
+
+                # Convert table rows to markdown format
+                markdown_rows = []
+                for i, row in enumerate(table):
+                    # Clean None values
+                    cleaned_row = [cell if cell else "" for cell in row]
+                    markdown_rows.append("| " + " | ".join(cleaned_row) + " |")
+                    # Add header separator after first row
+                    if i == 0:
+                        markdown_rows.append("| " + " | ".join(["---"] * len(cleaned_row)) + " |")
+
+                markdown_table = "\n".join(markdown_rows)
+
+                # Store as a Document chunk with metadata
+                doc = Document(
+                    page_content=markdown_table,
+                    metadata={
+                        "source": pdf_path,
+                        "page": page_num + 1,
+                        "type": "table"
+                    }
+                )
+                table_documents.append(doc)
+
+    return table_documents
 
 # ================================================================
 # STEP 1 — LOAD PDFs
@@ -215,14 +264,22 @@ def load_pdfs() -> list:
  
         # WHY: PyPDFLoader reads each page as a separate Document object
         # NOTE: each Document has .page_content (text) and .metadata (source, page)
+        
+        # WHY: PyPDFLoader extracts regular text content & apply ocr for scanned pages
         loader = PyPDFLoader(pdf_path)
         documents = loader.load()
-
-        # # WHY: if the PDF is scanned, low-quality pages will be detected and OCR will extract text
-        # documents = apply_ocr_to_low_quality_pages(pdf_path, documents)
-
         print(f"OK Loaded: {pdf_file} — {len(documents)} pages")
+
+        # WHY: auto-detects scanned pages and applies OCR where needed
+        documents = apply_ocr_to_low_quality_pages(pdf_path, documents)
+
         all_documents.extend(documents)
+
+        # WHY: pdfplumber separately extracts tables as markdown chunks
+        table_docs = extract_tables_from_pdf(pdf_path)
+        if table_docs:
+            print(f"   Tables found: {len(table_docs)} table(s) extracted as markdown")
+            all_documents.extend(table_docs)
  
     print(f"\nTotal pages loaded: {len(all_documents)}")
     return all_documents

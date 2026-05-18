@@ -216,14 +216,23 @@ with chat_container:
             emoji   = AGENT_EMOJI.get(agent, "🤖")
             label   = AGENT_LABEL.get(agent, agent.upper())
 
-            badge   = f'<div class="msg-agent-badge">{emoji} {label}</div>'
-            content = msg["content"].replace("\n", "<br>")
-            # srcs    = render_sources(sources)
-
+            badge = f'<div class="msg-agent-badge">{emoji} {label}</div>'
             st.markdown(
-                f'<div class="msg-bot">{badge}{content}</div>',
+                f'<div class="msg-bot">{badge}</div>',
                 unsafe_allow_html=True
             )
+            # WHY: st.markdown() renders tables properly unlike HTML divs
+            st.markdown(msg["content"])
+
+            # badge   = f'<div class="msg-agent-badge">{emoji} {label}</div>'
+
+            # content = msg["content"].replace("\n", "<br>")
+            # # srcs    = render_sources(sources)
+
+            # st.markdown(
+            #     f'<div class="msg-bot">{badge}{content}</div>',
+            #     unsafe_allow_html=True
+            # )
 
 # ================================================================
 # INPUT BOX

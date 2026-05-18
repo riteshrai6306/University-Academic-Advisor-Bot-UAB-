@@ -26,6 +26,9 @@ langgraph
 # WHY: reads and extracts text from normal PDF files page by page
 pypdf
 
+# WHY: extracts tables from PDFs as structured data
+pdfplumber
+
 # WHY: FAISS stores and searches PDF embeddings locally
 # NOTE: cpu version — no GPU needed
 faiss-cpu
